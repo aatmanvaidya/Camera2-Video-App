@@ -47,12 +47,16 @@ import kotlin.collections.ArrayList
 import kotlin.math.max
 
 class Camera2VideoFragment : Fragment(), View.OnClickListener,
+    //this method is called to check permissions such as access to camera etc
     ActivityCompat.OnRequestPermissionsResultCallback {
-
+    // defining some constant variables
     private val FRAGMENT_DIALOG = "dialog"
     private val TAG = "Camera2VideoFragment"
     private val SENSOR_ORIENTATION_DEFAULT_DEGREES = 90
     private val SENSOR_ORIENTATION_INVERSE_DEGREES = 270
+
+    //map integers to integers
+    //this container keeps its mappings in an array data structure, using a binary search to find keys
     private val DEFAULT_ORIENTATIONS = SparseIntArray().apply {
         append(Surface.ROTATION_0, 90)
         append(Surface.ROTATION_90, 0)
@@ -66,10 +70,7 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
         append(Surface.ROTATION_270, 0)
     }
 
-    /**
-     * [TextureView.SurfaceTextureListener] handles several lifecycle events on a
-     * [TextureView].
-     */
+    // handles several lifecycle events on a texture view
     private val surfaceTextureListener = object : TextureView.SurfaceTextureListener {
 
         override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
@@ -85,80 +86,42 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
         override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) = Unit
 
     }
-
-    /**
-     * An [AutoFitTextureView] for camera preview.
-     */
+    // autoFitTexture - can be adjusted accordingly
+    // calling it here
     private lateinit var textureView: AutoFitTextureView
-
-    /**
-     * Button to record video
-     */
+    //calling the button that records video
     private lateinit var videoButton: Button
-
-    /**
-     * A reference to the opened [android.hardware.camera2.CameraDevice].
-     */
+    //A reference to the opened [android.hardware.camera2.CameraDevice].
     private var cameraDevice: CameraDevice? = null
-
-    /**
-     * A reference to the current [android.hardware.camera2.CameraCaptureSession] for
-     * preview.
-     */
+    //a reference to the current camera capture session
     private var captureSession: CameraCaptureSession? = null
-
-    /**
-     * The [android.util.Size] of camera preview.
-     */
+    //size of camera preview
     private lateinit var previewSize: Size
-
-    /**
-     * The [android.util.Size] of video recording.
-     */
+    //the size of video recording
     private lateinit var videoSize: Size
-
-    /**
-     * Whether the app is recording video now
-     */
+    //check whether the video is being recording currently or not
     private var isRecordingVideo = false
-
-    /**
-     * An additional thread for running tasks that shouldn't block the UI.
-     */
+    //An additional thread for running tasks that shouldn't block the UI.
     private var backgroundThread: HandlerThread? = null
-
-    /**
-     * A [Handler] for running tasks in the background.
-     */
+    //A [Handler] for running tasks in the background.
     private var backgroundHandler: Handler? = null
-
-    /**
-     * A [Semaphore] to prevent the app from exiting before closing the camera.
-     */
+    //A [Semaphore] to prevent the app from exiting before closing the camera.
     private val cameraOpenCloseLock = Semaphore(1)
-
-    /**
-     * [CaptureRequest.Builder] for the camera preview
-     */
+    //capture request builder for camera preview
     private lateinit var previewRequestBuilder: CaptureRequest.Builder
-
-    /**
-     * Orientation of the camera sensor
-     */
+    //Orientation of the camera sensor
     private var sensorOrientation = 0
 
-    /**
-     * [CameraDevice.StateCallback] is called when [CameraDevice] changes its status.
-     */
+    //[CameraDevice.StateCallback] is called when [CameraDevice] changes its status.
     private val stateCallback = object : CameraDevice.StateCallback() {
-
+        //The CameraDevice class is a representation of a single camera connected to an Android device
         override fun onOpened(cameraDevice: CameraDevice) {
             cameraOpenCloseLock.release()
             this@Camera2VideoFragment.cameraDevice = cameraDevice
             startPreview()
             configureTransform(textureView.width, textureView.height)
         }
-
+        //when camera gets disconnected.
         override fun onDisconnected(cameraDevice: CameraDevice) {
             cameraOpenCloseLock.release()
             cameraDevice.close()
@@ -173,32 +136,29 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
         }
 
     }
-
-    /**
-     * Output file for video
-     */
+    //output file for video
     private var nextVideoAbsolutePath: String? = null
-
+    //init the mediaRecorder
     private var mediaRecorder: MediaRecorder? = null
 
-    override fun onCreateView(
+    override fun onCreateView( //inflate the layout, passing the layout
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? = inflater.inflate(R.layout.fragment_camera2_video, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        //setting up the buttons and on-click listeners
         textureView = view.findViewById(R.id.texture)
         videoButton = view.findViewById<Button>(R.id.video).also {
             it.setOnClickListener(this)
         }
         view.findViewById<View>(R.id.info).setOnClickListener(this)
     }
-
+    //makes the fragment begin interacting with the user (based on its containing activity being resumed).
     override fun onResume() {
         super.onResume()
         startBackgroundThread()
-
         // When the screen is turned off and turned back on, the SurfaceTexture is already
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
@@ -209,13 +169,15 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
             textureView.surfaceTextureListener = surfaceTextureListener
         }
     }
-
+    //fragment is no longer interacting with the user
+    // either because its activity is being paused or a fragment operation is modifying it in the activity.
     override fun onPause() {
         closeCamera()
         stopBackgroundThread()
         super.onPause()
     }
-
+    //This class represents the basic building block for user interface components.
+    // A View occupies a rectangular area on the screen and is responsible for drawing and event handling.
     override fun onClick(view: View) {
         when (view.id) {
             R.id.video -> if (isRecordingVideo) stopRecordingVideo() else startRecordingVideo()
@@ -229,19 +191,13 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
             }
         }
     }
-
-    /**
-     * Starts a background thread and its [Handler].
-     */
+    //Starts a background thread and its [Handler].
     private fun startBackgroundThread() {
         backgroundThread = HandlerThread("CameraBackground")
         backgroundThread?.start()
         backgroundHandler = Handler(backgroundThread?.looper!!)
     }
-
-    /**
-     * Stops the background thread and its [Handler].
-     */
+    //Stops the background thread and its [Handler].
     private fun stopBackgroundThread() {
         backgroundThread?.quitSafely()
         try {
@@ -252,7 +208,6 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
             Log.e(TAG, e.toString())
         }
     }
-
     /**
      * Gets whether you should show UI with rationale for requesting permissions.
      *
@@ -261,10 +216,7 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
      */
     private fun shouldShowRequestPermissionRationale(permissions: Array<String>) =
         permissions.any { shouldShowRequestPermissionRationale(it) }
-
-    /**
-     * Requests permissions needed for recording video.
-     */
+    //Requests permissions needed for recording video.
     private fun requestVideoPermissions() {
         if (shouldShowRequestPermissionRationale(VIDEO_PERMISSIONS)) {
             ConfirmationDialog().show(childFragmentManager, FRAGMENT_DIALOG)
@@ -272,7 +224,6 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
             requestPermissions(VIDEO_PERMISSIONS, REQUEST_VIDEO_PERMISSIONS)
         }
     }
-
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -295,7 +246,6 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
             super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         }
     }
-
     private fun hasPermissionsGranted(permissions: Array<String>) =
         permissions.none {
             checkSelfPermission((activity as FragmentActivity), it) != PERMISSION_GRANTED
@@ -307,39 +257,50 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
      * Lint suppression - permission is checked in [hasPermissionsGranted]
      */
     @SuppressLint("MissingPermission")
+    //on opening camera check the video permissions
     private fun openCamera(width: Int, height: Int) {
         if (!hasPermissionsGranted(VIDEO_PERMISSIONS)) {
             requestVideoPermissions()
             return
         }
-
-        val cameraActivity = activity
-        if (cameraActivity == null || cameraActivity.isFinishing) return
-
+        val cameraActivity = activity //get fragment activity
+        if (cameraActivity == null || cameraActivity.isFinishing) return //null check
+        //define a manager that returns the handle to a system-level service by name (string)
+        //CameraManager - A system service manager for detecting, characterizing, and connecting to CameraDevices.
         val manager = cameraActivity.getSystemService(Context.CAMERA_SERVICE) as CameraManager
         try {
+            //Acquires a permit from this semaphore, only if one is available at the time of invocation.
             if (!cameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw RuntimeException("Time out waiting to lock camera opening.")
             }
+            //Return the list of currently connected camera devices by identifier,
+            // including cameras that may be in use by other camera API clients.
             val cameraId = manager.cameraIdList[0]
-
             // Choose the sizes for camera preview and video recording
+            //Query the capabilities of a camera device. These capabilities are immutable for a given camera.
             val characteristics = manager.getCameraCharacteristics(cameraId)
+            //The available stream configurations that this camera device supports;
+            // also includes the minimum frame durations and the stall durations for each format/size combination.
             val map = characteristics.get(SCALER_STREAM_CONFIGURATION_MAP)
                 ?: throw RuntimeException("Cannot get available preview/video sizes")
+            //get the sensor orientation
             sensorOrientation = characteristics.get(SENSOR_ORIENTATION)!!
+            //function to set the size
+            //getOutputSizes - Get a list of sizes compatible with the requested image format.
             videoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder::class.java))
+            //set the size of the preview
             previewSize = chooseOptimalSize(
                 map.getOutputSizes(SurfaceTexture::class.java),
                 width, height, videoSize
             )
-
+            //not able to understand this part
             if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
                 textureView.setAspectRatio(previewSize.width, previewSize.height)
             } else {
                 textureView.setAspectRatio(previewSize.height, previewSize.width)
             }
             configureTransform(width, height)
+            //init the mediaRecorder
             mediaRecorder = MediaRecorder()
             manager.openCamera(cameraId, stateCallback, null)
         } catch (e: CameraAccessException) {
@@ -354,10 +315,7 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
             throw RuntimeException("Interrupted while trying to lock camera opening.")
         }
     }
-
-    /**
-     * Close the [CameraDevice].
-     */
+    //Close the Camera Device
     private fun closeCamera() {
         try {
             cameraOpenCloseLock.acquire()
@@ -388,7 +346,8 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
             val previewSurface = Surface(texture)
             previewRequestBuilder.addTarget(previewSurface)
 
-            cameraDevice?.createCaptureSession(listOf(previewSurface),
+            cameraDevice?.createCaptureSession(
+                listOf(previewSurface),
                 object : CameraCaptureSession.StateCallback() {
 
                     override fun onConfigured(session: CameraCaptureSession) {
@@ -527,7 +486,8 @@ class Camera2VideoFragment : Fragment(), View.OnClickListener,
 
             // Start a capture session
             // Once the session starts, we can update the UI and start recording
-            cameraDevice?.createCaptureSession(surfaces,
+            cameraDevice?.createCaptureSession(
+                surfaces,
                 object : CameraCaptureSession.StateCallback() {
 
                     override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {

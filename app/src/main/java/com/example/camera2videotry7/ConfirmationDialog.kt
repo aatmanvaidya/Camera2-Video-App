@@ -19,6 +19,6 @@ class ConfirmationDialog : DialogFragment() {
             .setNegativeButton(android.R.string.cancel) { _,_ ->
                 parentFragment?.activity?.finish()
             }
-            .create()
+            .create()!!
 
 }
